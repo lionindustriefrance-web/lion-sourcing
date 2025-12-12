@@ -1,76 +1,71 @@
 import streamlit as st
 import pandas as pd
 
-# CONFIGURATION DE LA PAGE
 st.set_page_config(page_title="Lion Sourcing", page_icon="🦁", layout="wide")
 
-# TITRE
-st.title("🦁 Lion Industrie - Moteur de Sourcing")
-st.markdown("Recherchez parmi les catalogues PDF, les offres par email et la base interne.")
+st.title("🦁 Lion Industrie - Sourcing Intelligent")
+st.markdown("Moteur de recherche unifié : Catalogues, Emails et Base Interne.")
 st.divider()
 
-# CHARGEMENT DES DONNÉES
+# CHARGEMENT
 @st.cache_data
 def load_data():
     try:
-        # On force la lecture en point-virgule
+        # Lecture avec séparateur point-virgule
         df = pd.read_csv("data.csv", sep=";")
         return df
-    except Exception as e:
+    except:
         return None
 
 df = load_data()
 
 if df is None:
-    st.error("⚠️ Erreur critique : Le fichier 'data.csv' est introuvable ou mal formaté.")
+    st.error("⚠️ Fichier data.csv introuvable.")
     st.stop()
 
-# BARRE LATÉRALE (FILTRES)
-st.sidebar.header("🔍 Filtres")
+# --- SIDEBAR (FILTRES) ---
+st.sidebar.header("🔍 Affiner la recherche")
 
-# 1. Filtre CATEGORIE (PDF vs Offre Mail vs Fleurs...)
-cats = sorted(df['Categorie'].astype(str).unique())
-selected_cat = st.sidebar.multiselect("Source / Catégorie", cats, default=cats)
+# 1. Filtre TYPE DE PRODUIT (Fleurs, Huiles...)
+# On enlève les valeurs vides
+types = sorted([x for x in df['Type_Produit'].unique() if str(x) != 'nan'])
+sel_type = st.sidebar.multiselect("Type de Produit", types, default=types)
 
-# 2. Filtre PAYS
-pays_list = sorted(df['Pays'].astype(str).unique())
-selected_pays = st.sidebar.multiselect("Pays", pays_list, default=pays_list)
+# 2. Filtre PAYS (Maintenant propre : Italie, France...)
+pays = sorted([x for x in df['Pays'].unique() if str(x) != 'nan'])
+sel_pays = st.sidebar.multiselect("Pays d'origine", pays, default=pays)
 
-# 3. Recherche textuelle (Pour trouver "Gelato" ou "Amnesia")
-search_term = st.sidebar.text_input("Recherche par mot-clé (ex: Amnesia)")
+# 3. Filtre SOURCE (D'où vient l'info ?)
+sources = sorted([x for x in df['Source'].unique() if str(x) != 'nan'])
+sel_source = st.sidebar.multiselect("Source de l'info", sources, default=sources)
 
-# 4. Filtre PRIX
-# On convertit en nombres pour être sûr, les erreurs deviennent 0
-df['Prix'] = pd.to_numeric(df['Prix'], errors='coerce').fillna(0)
-min_p = int(df['Prix'].min())
-max_p = int(df['Prix'].max())
-if max_p > 0:
-    price_filter = st.sidebar.slider("Prix Max (€)", min_p, max_p, max_p)
-else:
-    price_filter = 10000
+# 4. Recherche Mot-Clé
+search = st.sidebar.text_input("Recherche textuelle (ex: Gelato)")
 
-# FILTRAGE DU TABLEAU
-mask = (df['Categorie'].isin(selected_cat)) & (df['Pays'].isin(selected_pays)) & (df['Prix'] <= price_filter)
+# FILTRAGE
+mask = (df['Type_Produit'].isin(sel_type)) & \
+       (df['Pays'].isin(sel_pays)) & \
+       (df['Source'].isin(sel_source))
 
-if search_term:
-    # Recherche insensible à la casse dans le nom du produit
-    mask = mask & (df['Produit'].str.contains(search_term, case=False, na=False))
+if search:
+    mask = mask & (df['Produit'].str.contains(search, case=False, na=False))
 
 filtered_df = df[mask]
 
-# AFFICHAGE DES RÉSULTATS
-st.metric("Résultats trouvés", len(filtered_df))
+# --- RÉSULTATS ---
+col1, col2 = st.columns([1, 3])
+col1.metric("Offres trouvées", len(filtered_df))
 
 if not filtered_df.empty:
     st.dataframe(
         filtered_df,
         column_config={
-            "Lien": st.column_config.LinkColumn("Lien / Source"),
-            "Prix": st.column_config.NumberColumn("Prix", format="%.2f €"),
-            "Date": st.column_config.DateColumn("Date info"),
+            "Lien": st.column_config.LinkColumn("Lien Original"),
+            "Contact": st.column_config.LinkColumn("Email / Contact"),
+            "Prix": st.column_config.TextColumn("Prix indicatif"),
         },
-        hide_index=True,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 else:
-    st.info("Aucun résultat. Essayez d'élargir les filtres.")
+    st.warning("Aucun résultat avec ces filtres.")
